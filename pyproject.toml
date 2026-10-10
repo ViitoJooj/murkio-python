@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "murkio"
+version = "0.1.0"
+description = "Murkio identity for Python backends: verifies the session of each request (WSGI, ASGI, Django, Flask, FastAPI) and writes the login components into server-rendered pages."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Proprietary" }
+dependencies = ["cryptography>=41"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+murkio = ["py.typed"]
