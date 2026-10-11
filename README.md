@@ -98,3 +98,14 @@ requests (CSRF). `load_user=True` reads `POST /v1/me` (cached a minute);
 `check_revocation=True` asks the API whether the session was revoked (cached 30 s). A
 page request with an expired cookie gets a short handshake page that refreshes it. The
 backend never signs anyone in: the browser does.
+
+## Developing
+
+This repository is a git submodule of the Murkio identity service
+(`libs/external/python`). The tests run from that checkout: they read the token vectors
+every Murkio server SDK shares (`libs/spec/server`).
+
+```sh
+pip install -e . flask django fastapi httpx
+python -m unittest discover -s tests
+```
