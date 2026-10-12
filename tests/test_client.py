@@ -2,11 +2,11 @@ import json
 import pathlib
 import unittest
 
-from murkio import AuthResult, ExpiredToken, Murkio, TokenError, fnv1a32, parse_cookies
-
 from helpers import PUBLISHABLE_KEY, FakeApi
+from murkio import AuthResult, ExpiredToken, Murkio, TokenError, fnv1a32, parse_cookies
+from murkio.client import _urllib_transport
 
-VECTORS = json.loads((pathlib.Path(__file__).resolve().parents[3] / "spec" / "server" / "vectors.json").read_text())
+VECTORS = json.loads((pathlib.Path(__file__).resolve().parents[1] / "spec" / "server" / "vectors.json").read_text())
 HASH = fnv1a32(PUBLISHABLE_KEY)
 
 
@@ -15,7 +15,7 @@ def request(method="GET", host="app.example.com", scheme="https", headers=None, 
 
 
 class SharedVectors(unittest.TestCase):
-    """The same tokens must get the same verdict in every server SDK (libs/spec/server)."""
+    """The same tokens must get the same verdict in every server SDK (spec/server)."""
 
     def test_cookie_hash(self):
         for value, expected in VECTORS["cookie_hash"].items():
@@ -144,6 +144,7 @@ class Protect(unittest.TestCase):
         self.assertIn(f'data-murkio-key="{PUBLISHABLE_KEY}"', body)
         self.assertIn("connect-src https://api.example.com;", headers["Content-Security-Policy"])
         self.assertIn("murkio_handshake=1", headers["Set-Cookie"])
+        self.assertIn("HttpOnly", headers["Set-Cookie"])
         self.assertEqual(headers["Cache-Control"], "no-store")
 
         cookies["murkio_handshake"] = "1"
@@ -162,16 +163,23 @@ class Pages(unittest.TestCase):
         self.assertIn('data-murkio-after-login="/home"', head)
         self.assertEqual(head.__html__(), head)
         self.assertEqual(client.canvas(), "<murkio-identity-canvas></murkio-identity-canvas>")
-        self.assertEqual(client.canvas(class_='" onload="x', light_dom=True), '<murkio-identity-canvas class="&quot; onload=&quot;x" light-dom></murkio-identity-canvas>')
-        self.assertEqual(client.email_input(class_="input", placeholder="you@example.com"), '<murkio-identity-email-input class="input" placeholder="you@example.com"></murkio-identity-email-input>')
-        self.assertEqual(client.login_button("Entrar", class_="btn"), '<murkio-identity-login-button class="btn" label="Entrar"></murkio-identity-login-button>')
+        self.assertEqual(
+            client.canvas(class_='" onload="x', light_dom=True), '<murkio-identity-canvas class="&quot; onload=&quot;x" light-dom></murkio-identity-canvas>'
+        )
+        self.assertEqual(
+            client.email_input(class_="input", placeholder="you@example.com"),
+            '<murkio-identity-email-input class="input" placeholder="you@example.com"></murkio-identity-email-input>',
+        )
+        self.assertEqual(
+            client.login_button("Entrar", class_="btn"), '<murkio-identity-login-button class="btn" label="Entrar"></murkio-identity-login-button>'
+        )
 
         inline = client.bootstrap_script()
         self.assertNotIn("</script><b>", inline)
         self.assertIn("data-generated-at=", inline)
         payload = inline.split(">", 1)[1].rsplit("</script>", 1)[0]
-        self.assertEqual(json.loads(payload)["canvas"]["document"]["note"], "</script><b>& ")
-        self.assertNotIn(" ", payload)
+        self.assertEqual(json.loads(payload)["canvas"]["document"]["note"], "</script><b>&\u2028")
+        self.assertNotIn("\u2028", payload)
 
     def test_self_hosted_script(self):
         client = FakeApi().client(script_url="https://static.example.com/murkio.js")
@@ -180,6 +188,13 @@ class Pages(unittest.TestCase):
 
     def test_parse_cookies(self):
         self.assertEqual(parse_cookies("a=1; b=x%20y; a=2; empty="), {"a": "1", "b": "x y"})
+
+    def test_only_http_is_requested(self):
+        # The address of the keys comes from the API: urllib would also open file: and ftp: URLs.
+        send = _urllib_transport(1.0)
+        for url in ("file:///etc/hostname", "ftp://example.com/keys", "/etc/hostname"):
+            with self.assertRaises(OSError, msg=url):
+                send("GET", url, {}, None)
 
 
 if __name__ == "__main__":

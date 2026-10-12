@@ -4,11 +4,10 @@ are skipped when the framework is not installed."""
 import asyncio
 import unittest
 
+from helpers import PUBLISHABLE_KEY, FakeApi
 from murkio import fnv1a32
 from murkio.asgi import MurkioMiddleware as AsgiMiddleware
 from murkio.wsgi import MurkioMiddleware as WsgiMiddleware
-
-from helpers import PUBLISHABLE_KEY, FakeApi
 
 HASH = fnv1a32(PUBLISHABLE_KEY)
 
@@ -56,7 +55,11 @@ class Wsgi(unittest.TestCase):
 class Asgi(unittest.TestCase):
     def call(self, app, path="/", headers=None):
         scope = {
-            "type": "http", "method": "GET", "scheme": "https", "path": path, "query_string": b"",
+            "type": "http",
+            "method": "GET",
+            "scheme": "https",
+            "path": path,
+            "query_string": b"",
             "headers": [(b"host", b"app.example.com")] + [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()],
         }
         sent = []

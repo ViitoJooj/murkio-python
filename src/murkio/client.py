@@ -56,7 +56,7 @@ class ApiError(Exception):
 class Markup(str):
     """HTML that is already escaped. Jinja2 and Django do not escape it again."""
 
-    def __html__(self) -> "Markup":
+    def __html__(self) -> Markup:
         return self
 
 
@@ -137,9 +137,12 @@ def _json_segment(segment: str) -> Dict[str, Any]:
 
 def _urllib_transport(timeout: float) -> Transport:
     def send(method: str, url: str, headers: Dict[str, str], body: Optional[bytes]) -> Tuple[int, bytes]:
-        request = urllib.request.Request(url, data=body, headers=headers, method=method)
+        # urllib also opens file: and ftp: URLs, and the address of the keys comes from the API.
+        if urllib.parse.urlsplit(url).scheme not in ("http", "https"):
+            raise urllib.error.URLError(f"murkio: refusing to request a non-HTTP URL ({url.split(':', 1)[0]}:)")
+        request = urllib.request.Request(url, data=body, headers=headers, method=method)  # noqa: S310 - the scheme was checked above
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - the URL is the configured API
+            with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310  # nosec B310
                 return response.status, response.read()
         except urllib.error.HTTPError as error:
             return error.code, error.read()
@@ -213,7 +216,7 @@ class Murkio:
         with self._lock:
             if self._bootstrap and time.monotonic() - self._bootstrap[0] < _BOOTSTRAP_TTL:
                 return self._bootstrap[1]
-        data = self._call("GET", "/v1/client")
+        data: Dict[str, Any] = self._call("GET", "/v1/client")
         with self._lock:
             self._bootstrap = (time.monotonic(), data)
         return data
@@ -356,7 +359,7 @@ class Murkio:
         names = self._cookie_names(host)
         result = AuthResult(signed_in_hint=any(cookies.get(uat) == "1" for _, uat in names))
 
-        token = ""
+        token = ""  # nosec B105
         authorization = lower.get("authorization", "")
         if authorization.startswith("Bearer "):
             value = authorization[7:].strip()
@@ -424,8 +427,13 @@ class Murkio:
         that refreshes an expired session cookie), or None to go on.
         """
         result = self.authenticate(
-            method=method, scheme=scheme, host=host, headers=headers, cookies=cookies,
-            load_user=load_user, check_revocation=check_revocation,
+            method=method,
+            scheme=scheme,
+            host=host,
+            headers=headers,
+            cookies=cookies,
+            load_user=load_user,
+            check_revocation=check_revocation,
         )
         if result.session is not None:
             if roles and not result.session.has_role(*roles):
@@ -433,13 +441,8 @@ class Murkio:
             return result, None
 
         lower = {name.lower(): value for name, value in headers.items()}
-        navigation = method.upper() == "GET" and (
-            lower.get("sec-fetch-mode") == "navigate" or "text/html" in lower.get("accept", "")
-        )
-        if (
-            handshake and navigation and result.signed_in_hint
-            and result.reason in ("missing", "expired") and not cookies.get(_HANDSHAKE_GUARD)
-        ):
+        navigation = method.upper() == "GET" and (lower.get("sec-fetch-mode") == "navigate" or "text/html" in lower.get("accept", ""))
+        if handshake and navigation and result.signed_in_hint and result.reason in ("missing", "expired") and not cookies.get(_HANDSHAKE_GUARD):
             return result, self._handshake(scheme)
 
         if not required and not roles:
@@ -463,17 +466,16 @@ class Murkio:
             "</head><body></body></html>"
         )
         secure = "; Secure" if scheme == "https" else ""
+        policy = (
+            f"default-src 'none'; script-src 'nonce-{nonce}' {script_origin}; connect-src {api.scheme}://{api.netloc}; base-uri 'none'; frame-ancestors 'none'"
+        )
         return Response(
             200,
             [
                 ("Content-Type", "text/html; charset=utf-8"),
                 ("Cache-Control", "no-store"),
-                (
-                    "Content-Security-Policy",
-                    f"default-src 'none'; script-src 'nonce-{nonce}' {script_origin}; "
-                    f"connect-src {api.scheme}://{api.netloc}; base-uri 'none'; frame-ancestors 'none'",
-                ),
-                ("Set-Cookie", f"{_HANDSHAKE_GUARD}=1; Path=/; Max-Age=30; SameSite=Lax{secure}"),
+                ("Content-Security-Policy", policy),
+                ("Set-Cookie", f"{_HANDSHAKE_GUARD}=1; Path=/; Max-Age=30; HttpOnly; SameSite=Lax{secure}"),
             ],
             page.encode("utf-8"),
         )
@@ -489,17 +491,23 @@ class Murkio:
         oauth_redirect_url: Optional[str] = None,
     ) -> str:
         integrity = self.integrity if self.script_url else _cdn.INTEGRITY
-        return "<script" + _attributes([
-            ("src", self.script_url or _cdn.URL),
-            ("integrity", integrity),
-            ("crossorigin", "anonymous" if integrity else None),
-            ("nonce", nonce),
-            ("data-murkio-key", self.publishable_key),
-            ("data-murkio-api", self.api_url),
-            ("data-murkio-locale", locale),
-            ("data-murkio-after-login", after_login),
-            ("data-murkio-oauth-redirect", oauth_redirect_url),
-        ]) + "></script>"
+        return (
+            "<script"
+            + _attributes(
+                [
+                    ("src", self.script_url or _cdn.URL),
+                    ("integrity", integrity),
+                    ("crossorigin", "anonymous" if integrity else None),
+                    ("nonce", nonce),
+                    ("data-murkio-key", self.publishable_key),
+                    ("data-murkio-api", self.api_url),
+                    ("data-murkio-locale", locale),
+                    ("data-murkio-after-login", after_login),
+                    ("data-murkio-oauth-redirect", oauth_redirect_url),
+                ]
+            )
+            + "></script>"
+        )
 
     def head(
         self,
@@ -510,6 +518,7 @@ class Murkio:
         nonce: Optional[str] = None,
     ) -> Markup:
         """The ``<script>`` that loads the browser SDK, pinned with its SRI hash. Put it in ``<head>``."""
+        # murkio:allow dangerous-sink _script_tag escapes every attribute value
         return Markup(self._script_tag(nonce=nonce, after_login=after_login, locale=locale, oauth_redirect_url=oauth_redirect_url))
 
     def bootstrap_script(self) -> Markup:
@@ -521,23 +530,30 @@ class Murkio:
         raw = json.dumps(self.bootstrap(), ensure_ascii=True, separators=(",", ":"))
         raw = raw.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
         stamp = int(time.time() * 1000)
+        # murkio:allow dangerous-sink the JSON has <, > and & escaped, so it cannot end the tag
         return Markup(f'<script type="application/json" id="murkio-bootstrap" data-generated-at="{stamp}">{raw}</script>')
 
     @staticmethod
     def canvas(*, screen: Optional[str] = None, class_: Optional[str] = None, locale: Optional[str] = None, light_dom: bool = False) -> Markup:
         """``<murkio-identity-canvas>``: the login canvas designed in the dashboard."""
         attributes = _attributes([("screen", screen), ("class", class_), ("locale", locale)])
+        # murkio:allow dangerous-sink _attributes escapes every attribute value
         return Markup(f"<murkio-identity-canvas{attributes}{' light-dom' if light_dom else ''}></murkio-identity-canvas>")
 
     @staticmethod
     def _field(tag: str, class_: Optional[str], form: Optional[str], placeholder: Optional[str] = None, label: Optional[str] = None) -> Markup:
         attributes = _attributes([("class", class_), ("form", form), ("placeholder", placeholder), ("label", label)])
+        # murkio:allow dangerous-sink _attributes escapes every attribute value
         return Markup(f"<{tag}{attributes}></{tag}>")
 
-    def email_input(self, *, class_: Optional[str] = None, placeholder: Optional[str] = None, label: Optional[str] = None, form: Optional[str] = None) -> Markup:
+    def email_input(
+        self, *, class_: Optional[str] = None, placeholder: Optional[str] = None, label: Optional[str] = None, form: Optional[str] = None
+    ) -> Markup:
         return self._field("murkio-identity-email-input", class_, form, placeholder, label)
 
-    def password_input(self, *, class_: Optional[str] = None, placeholder: Optional[str] = None, label: Optional[str] = None, form: Optional[str] = None) -> Markup:
+    def password_input(
+        self, *, class_: Optional[str] = None, placeholder: Optional[str] = None, label: Optional[str] = None, form: Optional[str] = None
+    ) -> Markup:
         return self._field("murkio-identity-password-input", class_, form, placeholder, label)
 
     def keep_logged(self, label: str, *, class_: Optional[str] = None, form: Optional[str] = None) -> Markup:

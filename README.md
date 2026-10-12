@@ -18,14 +18,13 @@ from murkio.flask import init_app, protect, current
 
 murkio = Murkio()
 app = Flask(__name__)
-init_app(app, murkio)                       # g.murkio on every request; `murkio` in templates
+init_app(app, murkio)  # g.murkio on every request; `murkio` in templates
+
 
 @app.get("/login")
 def login():
-    return render_template_string(
-        "<head>{{ murkio.head(after_login='/dashboard') }}{{ murkio.bootstrap_script() }}</head>"
-        "<body>{{ murkio.canvas() }}</body>"
-    )
+    return render_template_string("<head>{{ murkio.head(after_login='/dashboard') }}{{ murkio.bootstrap_script() }}</head><body>{{ murkio.canvas() }}</body>")
+
 
 @app.get("/dashboard")
 @protect(murkio, required=True, sign_in_url="/login", load_user=True)
@@ -37,11 +36,12 @@ def dashboard():
 
 ```python
 # settings.py
-MIDDLEWARE = [..., "murkio.django.MurkioMiddleware"]     # request.murkio on every request
+MIDDLEWARE = [..., "murkio.django.MurkioMiddleware"]  # request.murkio on every request
 MURKIO = {"sign_in_url": "/login"}
 
 # views.py
 from murkio.django import protect
+
 
 @protect(required=True, roles=["admin"], load_user=True)
 def admin(request):
@@ -62,9 +62,11 @@ murkio = Murkio()
 app = FastAPI()
 app.add_middleware(MurkioMiddleware, murkio=murkio)
 
+
 @app.get("/api/orders")
-def orders(session: Session = Depends(require_session())):      # 401 without a session
+def orders(session: Session = Depends(require_session())):  # 401 without a session
     return {"user": session.user_id}
+
 
 @app.get("/api/admin")
 def admin(session: Session = Depends(require_session(["admin"]))):
@@ -101,11 +103,26 @@ backend never signs anyone in: the browser does.
 
 ## Developing
 
-This repository is a git submodule of the Murkio identity service
-(`libs/external/python`). The tests run from that checkout: they read the token vectors
-every Murkio server SDK shares (`libs/spec/server`).
-
 ```sh
-pip install -e . flask django fastapi httpx
+pip install -e . -r requirements-test.txt
 python -m unittest discover -s tests
 ```
+
+The tests read the token vectors every Murkio server SDK shares. That copy (`spec/`) and
+the checks in `infra/pipeline/` are kept in the Murkio identity service and synced from
+there, so they are not edited here.
+
+Every pull request runs the workflows in `.github/workflows`. The same checks, locally
+(`pip install -r requirements-dev.txt` brings the tools):
+
+| Workflow | What it runs |
+| --- | --- |
+| Build | `python -m build`, `twine check --strict dist/*`, then installs the wheel and imports it |
+| Format | `ruff format --check .` |
+| Lint | `ruff check .`, `mypy` (strict) |
+| Tests | the suite on Python 3.9 and 3.14 |
+| Quality & Governance Checks | `for check in infra/pipeline/*.py; do python3 "$check"; done` |
+| Security | `bandit -r src -c pyproject.toml`, `pip-audit --strict .`, `gitleaks git .`, `zizmor --pedantic .` |
+| CodeQL, Dependency Review | run by GitHub on the pull request |
+
+Security reports: see [SECURITY.md](SECURITY.md).

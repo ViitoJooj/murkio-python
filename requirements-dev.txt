@@ -1,0 +1,13 @@
+# The tools the pipeline runs, on the newest Python. Dependabot keeps them current.
+bandit==1.9.4
+build==1.6.1
+mypy==2.4.0
+pip-audit==2.10.1
+ruff==0.17.0
+twine==7.0.0
+
+# The frameworks the adapters are type-checked against.
+django==6.1.2
+django-stubs==6.1.2
+fastapi==0.143.0
+flask==3.1.3
