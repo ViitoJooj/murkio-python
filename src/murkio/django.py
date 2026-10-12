@@ -18,7 +18,7 @@ components (``{{ request.murkio_client.head }}`` in a template).
 from __future__ import annotations
 
 import functools
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Optional
 
 from .client import Murkio
 from .wsgi import request_from_environ
@@ -28,13 +28,13 @@ _client: Optional[Murkio] = None
 
 def client() -> Murkio:
     """The process-wide client, created from the environment on first use."""
-    global _client
+    global _client  # noqa: PLW0603 - one client for the process, created on first use
     if _client is None:
         _client = Murkio()
     return _client
 
 
-def _options() -> dict:
+def _options() -> Dict[str, Any]:
     try:
         from django.conf import settings
 
@@ -52,7 +52,7 @@ def _to_django(response: Any) -> Any:
     return answer
 
 
-def _protect(request: Any, options: dict) -> Any:
+def _protect(request: Any, options: Dict[str, Any]) -> Any:
     murkio = client()
     fields = request_from_environ(request.META)
     fields["scheme"] = getattr(request, "scheme", None) or fields["scheme"]

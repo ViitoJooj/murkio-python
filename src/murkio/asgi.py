@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, MutableMapping, Optional
 
 from .client import AuthResult, Murkio, parse_cookies
 
 SCOPE_KEY = "murkio"
-Scope = Dict[str, Any]
+Scope = MutableMapping[str, Any]
 
 
 def request_from_scope(scope: Scope) -> Dict[str, Any]:
@@ -59,11 +59,13 @@ class MurkioMiddleware:
             await self.app(scope, receive, send)
             return
 
-        await send({
-            "type": "http.response.start",
-            "status": response.status,
-            "headers": [(name.lower().encode("latin-1"), value.encode("latin-1")) for name, value in response.headers],
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": response.status,
+                "headers": [(name.lower().encode("latin-1"), value.encode("latin-1")) for name, value in response.headers],
+            }
+        )
         await send({"type": "http.response.body", "body": response.body})
 
 

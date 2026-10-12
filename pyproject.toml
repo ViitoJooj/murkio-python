@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Murkio identity for Python backends: verifies the session of each request (WSGI, ASGI, Django, Flask, FastAPI) and writes the login components into server-rendered pages."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "Proprietary" }
+license = "LicenseRef-Proprietary"
 dependencies = ["cryptography>=41"]
 
 [tool.setuptools.packages.find]
@@ -16,3 +16,27 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 murkio = ["py.typed"]
+
+[tool.ruff]
+line-length = 160
+src = ["src", "tests"]
+extend-exclude = ["infra"] # synced from the identity service, checked there
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "PIE", "RET", "RSE", "ISC", "G", "LOG", "T20", "BLE", "PERF", "FURB",
+    "ASYNC", "DTZ", "PGH", "PL", "RUF", "S", "TID", "SLF", "ARG", "INP",
+]
+ignore = [
+    "UP006", "UP007", "UP035", "UP045", # typing.Dict/Optional stay: FastAPI reads the annotations at run time, also on Python 3.9
+    "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR2004", # size and "magic value" limits
+    "PLC0415", # an adapter imports its framework only when it is used
+    "N818", # ExpiredToken is the name the other Murkio SDKs use
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "SLF001", "INP001", "ARG", "N802", "B008"]
+
+[tool.mypy]
+strict = true
+files = ["src"]

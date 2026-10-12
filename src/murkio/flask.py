@@ -1,21 +1,21 @@
 """Flask helpers.
 
-    from murkio import Murkio
-    from murkio.flask import init_app, protect, current
+from murkio import Murkio
+from murkio.flask import init_app, protect, current
 
-    murkio = Murkio()
-    init_app(app, murkio)                      # g.murkio on every request
+murkio = Murkio()
+init_app(app, murkio)                      # g.murkio on every request
 
-    @app.get("/dashboard")
-    @protect(murkio, required=True, sign_in_url="/login", load_user=True)
-    def dashboard():
-        return f"Hello {current().user.email}"
+@app.get("/dashboard")
+@protect(murkio, required=True, sign_in_url="/login", load_user=True)
+def dashboard():
+    return f"Hello {current().user.email}"
 """
 
 from __future__ import annotations
 
 import functools
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Optional
 
 from .client import AuthResult, Murkio
 from .wsgi import request_from_environ
@@ -33,16 +33,16 @@ def init_app(app: Any, murkio: Optional[Murkio] = None, **options: Any) -> Murki
 
     client = murkio or Murkio()
 
-    @app.before_request
     def _murkio_before_request() -> Any:
         result, response = client.protect(**request_from_environ(flask.request.environ), **options)
         flask.g.murkio = result
         return _to_flask(response) if response is not None else None
 
-    @app.context_processor
-    def _murkio_context() -> dict:
+    def _murkio_context() -> Dict[str, Any]:
         return {"murkio": client, "murkio_auth": current()}
 
+    app.before_request(_murkio_before_request)
+    app.context_processor(_murkio_context)
     return client
 
 

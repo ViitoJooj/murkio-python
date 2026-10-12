@@ -12,11 +12,7 @@ ENVIRON_KEY = "murkio"
 
 def request_from_environ(environ: Dict[str, Any]) -> Dict[str, Any]:
     """The request fields ``Murkio.protect`` needs, from a WSGI environ."""
-    headers = {
-        name[5:].replace("_", "-").lower(): value
-        for name, value in environ.items()
-        if name.startswith("HTTP_") and isinstance(value, str)
-    }
+    headers = {name[5:].replace("_", "-").lower(): value for name, value in environ.items() if name.startswith("HTTP_") and isinstance(value, str)}
     query = environ.get("QUERY_STRING") or ""
     path = (environ.get("SCRIPT_NAME") or "") + (environ.get("PATH_INFO") or "/")
     return {

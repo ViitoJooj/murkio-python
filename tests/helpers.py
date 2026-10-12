@@ -38,14 +38,29 @@ class FakeApi:
             if headers.get("Authorization") != f"Bearer {PUBLISHABLE_KEY}":
                 return 401, json.dumps({"details": [{"code": "bss-01"}]}).encode()
             data = {
-                "application_id": self.application, "issuer": self.issuer, "jwks_url": "/jwks.json",
-                "config": {}, "canvas": {"version": 0, "document": {"note": "</script><b>& "}},
+                "application_id": self.application,
+                "issuer": self.issuer,
+                "jwks_url": "/jwks.json",
+                "config": {},
+                "canvas": {"version": 0, "document": {"note": "</script><b>&\u2028"}},
             }
             return 200, json.dumps({"data": data}).encode()
         if path == "/jwks.json":
             return 200, json.dumps(self.jwks).encode()
         if path == "/v1/me":
-            return 200, json.dumps({"data": {"id": "user-1", "session_id": "session-1", "email": "ana@example.com", "email_verified": True, "roles": ["user"], "mfa_enabled": False, "created_at": "2026-10-10T00:00:00Z"}}).encode()
+            return 200, json.dumps(
+                {
+                    "data": {
+                        "id": "user-1",
+                        "session_id": "session-1",
+                        "email": "ana@example.com",
+                        "email_verified": True,
+                        "roles": ["user"],
+                        "mfa_enabled": False,
+                        "created_at": "2026-10-10T00:00:00Z",
+                    }
+                }
+            ).encode()
         if path == "/v1/sessions/verify":
             token = json.loads(body or b"{}").get("access_token")
             return 200, json.dumps({"data": {"active": token not in self.revoked}}).encode()
@@ -53,8 +68,15 @@ class FakeApi:
 
     def token(self, kid: str = "k1", **claims: Any) -> str:
         payload = {
-            "iss": self.issuer, "sub": "user-1", "aud": self.application, "aid": self.application, "sid": "session-1",
-            "roles": ["user"], "iat": int(time.time()), "exp": int(time.time()) + 900, "jti": "j1",
+            "iss": self.issuer,
+            "sub": "user-1",
+            "aud": self.application,
+            "aid": self.application,
+            "sid": "session-1",
+            "roles": ["user"],
+            "iat": int(time.time()),
+            "exp": int(time.time()) + 900,
+            "jti": "j1",
         }
         payload.update(claims)
         signing = b64(json.dumps({"alg": "EdDSA", "kid": kid}).encode()) + "." + b64(json.dumps(payload).encode())

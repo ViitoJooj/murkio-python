@@ -1,17 +1,17 @@
 """FastAPI / Starlette dependencies.
 
-    from fastapi import Depends, FastAPI
-    from murkio import Murkio, Session
-    from murkio.asgi import MurkioMiddleware
-    from murkio.fastapi import require_session
+from fastapi import Depends, FastAPI
+from murkio import Murkio, Session
+from murkio.asgi import MurkioMiddleware
+from murkio.fastapi import require_session
 
-    murkio = Murkio()
-    app = FastAPI()
-    app.add_middleware(MurkioMiddleware, murkio=murkio)
+murkio = Murkio()
+app = FastAPI()
+app.add_middleware(MurkioMiddleware, murkio=murkio)
 
-    @app.get("/api/orders")
-    def orders(session: Session = Depends(require_session())):
-        return {"user": session.user_id}
+@app.get("/api/orders")
+def orders(session: Session = Depends(require_session())):
+    return {"user": session.user_id}
 """
 
 from __future__ import annotations
