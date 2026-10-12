@@ -1,0 +1,6 @@
+# What the tests need besides the package. Only lower bounds: the suite runs
+# from Python 3.9 to the newest one, and each picks the releases it supports.
+django>=4.2
+fastapi>=0.110
+flask>=3.0
+httpx>=0.27
