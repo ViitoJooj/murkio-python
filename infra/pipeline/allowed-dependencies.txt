@@ -1,0 +1,5 @@
+# The runtime dependencies this SDK ships with, one per line, each with the
+# reason it is needed. infra/pipeline/verify_dependencies.py fails when the
+# manifest and this list disagree.
+
+cryptography # verifies the Ed25519 signature of the access token; Python has no Ed25519 of its own
